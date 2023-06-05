@@ -1,2 +1,3 @@
-#LX	LY	RX	RY
-221	103	178	103
+version https://git-lfs.github.com/spec/v1
+oid sha256:21a069877163a826e3331ae1c82276b2d1257b74a153521268409890089076c6
+size 31
