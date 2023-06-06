@@ -7,6 +7,22 @@ import pickle
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 
+
+def preprocess_eye_image(eye_img):
+    # Convert eye image to grayscale
+    eye_gray = cv2.cvtColor(eye_img, cv2.COLOR_BGR2GRAY)
+
+    # Apply image processing techniques (e.g., thresholding, smoothing) as needed
+    _, eye_thresh = cv2.threshold(eye_gray, 30, 255, cv2.THRESH_BINARY)
+    eye_smoothed = cv2.GaussianBlur(eye_thresh, (5, 5), 0)
+
+    # Resize the eye image and extract features
+    resized_eye_img = cv2.resize(eye_smoothed, (64, 64))
+    eye_features = np.reshape(resized_eye_img, (1, -1))
+
+    return eye_features
+
+
 # Load pre-trained models
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye_tree_eyeglasses.xml')
@@ -14,6 +30,37 @@ eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye_tre
 # Initialize classifier for eye tracking
 eye_tracking_classifier = SVC()
 scaler = StandardScaler()
+
+dataset_dir = 'BioID-FaceDatabase-V1.2'
+
+train_eye_images = []  # To store the loaded eye images
+
+# Load eye images from the dataset directory
+for filename in os.listdir(dataset_dir):
+    if filename.endswith('.pgm'):
+        img_path = os.path.join(dataset_dir, filename)
+        eye_img = cv2.imread(img_path)
+        train_eye_images.append(eye_img)
+
+# Convert the list of eye images to a numpy array
+train_eye_images = np.array(train_eye_images)
+
+# Prepare the eye features for training
+train_eye_features = np.concatenate([preprocess_eye_image(img) for img in train_eye_images])
+
+# Fit the scaler with the training data
+scaler.fit(train_eye_features)
+# Prepare the corresponding labels for training (you need to define the labels based on your dataset)
+train_labels = np.array([i for i in range(0, 1521)])
+
+'''
+# Train the eye tracking classifier
+eye_tracking_classifier.fit(train_eye_features, train_labels)
+'''
+
+filepath = 'eyetracking.sav'
+
+eye_tracking_classifier = pickle.load(open(filepath, 'rb'))
 
 
 # Function to detect faces and eyes
@@ -47,7 +94,7 @@ def detect_faces_eyes(frame):
 
             # Predict the gaze direction using the eye tracking classifier
             gaze_direction = eye_tracking_classifier.predict(eye_features_normalized)
-            gaze_directions.append(gaze_direction)
+            gaze_directions.append(gaze_direction.reshape(-1))
 
             # Display the gaze direction on the frame
             cv2.putText(frame, "Gaze: {}".format(gaze_direction), (x + ex, y + ey - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
@@ -60,21 +107,6 @@ def detect_faces_eyes(frame):
     last_gaze_direction = gaze_directions[-1] if gaze_detected else None
 
     return frame, face_detected, last_gaze_direction
-
-
-def preprocess_eye_image(eye_img):
-    # Convert eye image to grayscale
-    eye_gray = cv2.cvtColor(eye_img, cv2.COLOR_BGR2GRAY)
-
-    # Apply image processing techniques (e.g., thresholding, smoothing) as needed
-    _, eye_thresh = cv2.threshold(eye_gray, 30, 255, cv2.THRESH_BINARY)
-    eye_smoothed = cv2.GaussianBlur(eye_thresh, (5, 5), 0)
-
-    # Resize the eye image and extract features
-    resized_eye_img = cv2.resize(eye_smoothed, (64, 64))
-    eye_features = np.reshape(resized_eye_img, (1, -1))
-
-    return eye_features
 
 
 def run():
@@ -91,37 +123,6 @@ def run():
     gaze_start_time = None
     face_duration = 0
     gaze_duration = 0
-
-    dataset_dir = 'G:/ML PROJ/hstory/BioID-FaceDatabase-V1.2'
-
-    train_eye_images = []  # To store the loaded eye images
-
-    # Load eye images from the dataset directory
-    for filename in os.listdir(dataset_dir):
-        if filename.endswith('.pgm'):
-            img_path = os.path.join(dataset_dir, filename)
-            eye_img = cv2.imread(img_path)
-            train_eye_images.append(eye_img)
-
-    # Convert the list of eye images to a numpy array
-    train_eye_images = np.array(train_eye_images)
-
-    # Prepare the eye features for training
-    train_eye_features = np.concatenate([preprocess_eye_image(img) for img in train_eye_images])
-
-    # Fit the scaler with the training data
-    scaler.fit(train_eye_features)
-    # Prepare the corresponding labels for training (you need to define the labels based on your dataset)
-    train_labels = np.array([i for i in range(0, 1521)])
-
-    '''
-    # Train the eye tracking classifier
-    eye_tracking_classifier.fit(train_eye_features, train_labels)
-    '''
-
-    filepath = 'G:/ML PROJ/hstory/eyetracking.sav'
-
-    eye_tracking_classifier = pickle.load(open(filepath, 'rb'))
 
     init_time = time.time()
 
@@ -166,7 +167,7 @@ def run():
         elapsed_time = current_time - init_time
 
         if elapsed_time >= unit_time:
-            telemetry.append([total_face, total_gaze])
+            telemetry.append([face_duration, gaze_duration])
             telemetry_time.append(current_time)
             init_time = current_time
 
@@ -189,7 +190,7 @@ def run():
     plt.xlabel('Time')
     plt.ylabel('Duration')
     plt.legend()
-    plt.show()
+    #plt.show()
 
     # Save telemetry to a CSV file
     telemetry_file = 'telemetry.csv'
