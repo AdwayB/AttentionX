@@ -1,6 +1,7 @@
 import os
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 import pickle
 from sklearn.svm import SVC
@@ -76,96 +77,124 @@ def preprocess_eye_image(eye_img):
     return eye_features
 
 
-# Open webcam
-cap = cv2.VideoCapture(0)
-total_face = 0
-total_gaze = 0
-face_start_time = None
-gaze_start_time = None
-face_duration = 0
-gaze_duration = 0
+def run():
+    # Initialize variables
+    telemetry = []
+    telemetry_time = []
+    unit_time = 5  # Time interval for telemetry collection (in seconds)
 
-dataset_dir = 'G:/ML PROJ/hstory/BioID-FaceDatabase-V1.2'
+    # Open webcam
+    cap = cv2.VideoCapture(0)
+    total_face = 0
+    total_gaze = 0
+    face_start_time = None
+    gaze_start_time = None
+    face_duration = 0
+    gaze_duration = 0
 
-train_eye_images = []  # To store the loaded eye images
+    dataset_dir = 'G:/ML PROJ/hstory/BioID-FaceDatabase-V1.2'
 
-# Load eye images from the dataset directory
-for filename in os.listdir(dataset_dir):
-    if filename.endswith('.pgm'):
-        img_path = os.path.join(dataset_dir, filename)
-        eye_img = cv2.imread(img_path)
-        train_eye_images.append(eye_img)
+    train_eye_images = []  # To store the loaded eye images
 
-# Convert the list of eye images to a numpy array
-train_eye_images = np.array(train_eye_images)
+    # Load eye images from the dataset directory
+    for filename in os.listdir(dataset_dir):
+        if filename.endswith('.pgm'):
+            img_path = os.path.join(dataset_dir, filename)
+            eye_img = cv2.imread(img_path)
+            train_eye_images.append(eye_img)
 
-# Prepare the eye features for training
-train_eye_features = np.concatenate([preprocess_eye_image(img) for img in train_eye_images])
+    # Convert the list of eye images to a numpy array
+    train_eye_images = np.array(train_eye_images)
 
-# Fit the scaler with the training data
-scaler.fit(train_eye_features)
-# Prepare the corresponding labels for training (you need to define the labels based on your dataset)
-train_labels = np.array([i for i in range(0, 1521)])
+    # Prepare the eye features for training
+    train_eye_features = np.concatenate([preprocess_eye_image(img) for img in train_eye_images])
 
-'''
-# Train the eye tracking classifier
-eye_tracking_classifier.fit(train_eye_features, train_labels)
-'''
+    # Fit the scaler with the training data
+    scaler.fit(train_eye_features)
+    # Prepare the corresponding labels for training (you need to define the labels based on your dataset)
+    train_labels = np.array([i for i in range(0, 1521)])
 
-filepath = 'G:/ML PROJ/hstory/eyetracking.sav'
+    '''
+    # Train the eye tracking classifier
+    eye_tracking_classifier.fit(train_eye_features, train_labels)
+    '''
 
-eye_tracking_classifier = pickle.load(open(filepath, 'rb'))
+    filepath = 'G:/ML PROJ/hstory/eyetracking.sav'
 
-init_time = time.time()
+    eye_tracking_classifier = pickle.load(open(filepath, 'rb'))
 
-while True:
-    # Read frame from webcam
-    ret, frame = cap.read()
+    init_time = time.time()
 
-    # Break the loop if no frame is captured
-    if not ret:
-        break
+    while True:
+        # Read frame from webcam
+        ret, frame = cap.read()
 
-    # Detect faces and gaze in the frame
-    output_frame, face_detected, gaze_direction1 = detect_faces_eyes(frame)
+        # Break the loop if no frame is captured
+        if not ret:
+            break
 
-    # Update face duration
-    if face_detected:
-        if face_start_time is None:
-            face_start_time = time.time()
-    else:
-        if face_start_time is not None:
-            face_duration = time.time() - face_start_time
-            total_face += face_duration
-            face_start_time = None
+        # Detect faces and gaze in the frame
+        output_frame, face_detected, gaze_direction1 = detect_faces_eyes(frame)
 
-    if gaze_direction1 is not None:
-        if gaze_start_time is None:
-            gaze_start_time = time.time()
-    else:
-        if gaze_start_time is not None:
-            gaze_duration = time.time() - gaze_start_time
-            total_gaze += gaze_duration
-            gaze_start_time = None
+        # Update face duration
+        if face_detected:
+            if face_start_time is None:
+                face_start_time = time.time()
+        else:
+            if face_start_time is not None:
+                face_duration = time.time() - face_start_time
+                total_face += face_duration
+                face_start_time = None
 
-    # Display the output frame
-    cv2.imshow('Face and Eye Detection', output_frame)
+        if gaze_direction1 is not None:
+            if gaze_start_time is None:
+                gaze_start_time = time.time()
+        else:
+            if gaze_start_time is not None:
+                gaze_duration = time.time() - gaze_start_time
+                total_gaze += gaze_duration
+                gaze_start_time = None
 
-    # Log the duration of face and gaze
-    #print("Face duration: {:.2f}s".format(face_duration))
-    #print("Gaze duration: {:.2f}s".format(gaze_duration))
+        # Display the output frame
+        cv2.imshow('Face and Eye Detection', output_frame)
 
-    # Break the loop if 's' is pressed
-    if cv2.waitKey(1) & 0xFF == ord('s'):
-        break
+        # Log the duration of face and gaze
+        #print("Face duration: {:.2f}s".format(face_duration))
+        #print("Gaze duration: {:.2f}s".format(gaze_duration))
 
-current_time = time.time()
-if face_start_time is not None:
-    total_face += current_time - face_start_time
+        current_time = time.time()
+        elapsed_time = current_time - init_time
 
-print("\n\nTotal Face duration: {:.2f}s".format(total_face))
-print("Total Gaze duration: {:.2f}s".format(total_gaze))
+        if elapsed_time >= unit_time:
+            telemetry.append([total_face, total_gaze])
+            telemetry_time.append(current_time)
+            init_time = current_time
 
-# Release the webcam and close all windows
-cap.release()
-cv2.destroyAllWindows()
+        # Break the loop if 's' is pressed
+        if cv2.waitKey(1) & 0xFF == ord('s'):
+            break
+
+    current_time = time.time()
+    if face_start_time is not None:
+        total_face += current_time - face_start_time
+
+    print("\n\nTotal Face duration: {:.2f}s".format(total_face))
+    print("Total Gaze duration: {:.2f}s".format(total_gaze))
+
+    # Plot telemetry
+    telemetry = np.array(telemetry)
+    telemetry_time = np.array(telemetry_time)
+    plt.plot(telemetry_time, telemetry[:, 0], label='Face Duration')
+    plt.plot(telemetry_time, telemetry[:, 1], label='Gaze Duration')
+    plt.xlabel('Time')
+    plt.ylabel('Duration')
+    plt.legend()
+    plt.show()
+
+    # Save telemetry to a CSV file
+    telemetry_file = 'telemetry.csv'
+    np.savetxt(telemetry_file, np.column_stack((telemetry_time, telemetry)), delimiter=',')
+
+    # Release the webcam and close all windows
+    cap.release()
+    cv2.destroyAllWindows()
